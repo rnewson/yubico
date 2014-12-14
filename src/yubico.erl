@@ -14,21 +14,19 @@ verify(OTP, HexKey, HexUID) when is_list(OTP), is_list(HexKey), is_list(HexUID) 
     ExpectedUID = hex_to_binary(HexUID),
     Cipher = hex_to_binary(modhex_to_hex(Token)),
     Plain = decrypt(Key, Cipher),
-    ActualCRC = crc16(Plain),
+    ExpectedInnerCRC = (bnot crc16(binary:part(Plain, 0, 14))) band 16#ffff,
+    ActualOuterCRC = crc16(Plain),
     <<ActualUID:6/binary, Counter:16/little, Low:16/little,
       High:8, Use:8/little, Random:16/little,
-      CRC:16/little>> = Plain,
-    case {ExpectedUID == ActualUID,
-          ActualCRC == 16#f0b8} of
-        {true, true} ->
-            Props = [{plain, binary_to_list(Plain)},
-                     {uid, ActualUID},
-                     {counter, Counter band 16#7fff},
+      ActualInnerCRC:16/little>> = Plain,
+    case ExpectedUID == ActualUID andalso
+        ActualOuterCRC == 16#f0b8 andalso
+        ExpectedInnerCRC == ActualInnerCRC of
+        true ->
+            Props = [{counter, Counter band 16#7fff},
                      {low, Low},
                      {high, High},
-                     {use, Use},
-                     {random, Random},
-                     {crc, CRC}],
+                     {use, Use}],
             {ok, Props};
         _ ->
             {error, bad_otp}
